@@ -9,10 +9,15 @@
 ```sh
 python3 -B check_project.py
 python3 -B -m unittest discover -s tests -t . -v
+python3 -B verify.py
 python3 -B demo.py
 ```
 
-演示从 `samples/shift.json` 读取交班样例，在独立临时目录建立源站、实收和报告库。样例包含 2000 nm 录入、更正、补测、再次发行以及关闭归档后的原号领取。
+演示从 `samples/shift.json` 读取交班样例，在独立临时目录建立源站、实收和报告库。样例包含 2000 nm 录入、更正、补测、再次发行以及关闭归档后的原号领取。演示最后断开源库，再展示处置单的开办、换版、迟到单实记与各版报告领取（`DISPOSITION.md`）。`verify.py` 串行运行原回归、四份规程夹具，以及迟到单和待核换版两条核验，任一失败以非零状态退出。
+
+## 处置交班
+
+处置（开办、换版、发单、分拣实记）另见 `DISPOSITION.md`：`report.archive.initialize_disposition_archive`、`review.service` 下的 `open_disposition`/`revise_disposition`/`issue_disposition`/`get_disposition`，以及独立分拣库上的 `sorting.SortingDesk`。
 
 ## 工作库与公开入口
 

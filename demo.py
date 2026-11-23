@@ -4,6 +4,7 @@ import json
 import sqlite3
 from tempfile import TemporaryDirectory
 
+from disposition_fixture import DropReply, prepare_examples, DEVIATION
 from exchange.accept import receive_packet
 from exchange.catalog import initialize_catalog
 from exchange.issue import issue_packet
@@ -13,9 +14,16 @@ from procedure.freeze import freeze_procedure, initialize_procedure_store
 from procedure.guards import RationalInterval, format_rational
 from reference.ingest import record_reference
 from reference.revisions import initialize_reference_store
-from report.archive import initialize_archive
+from report.archive import initialize_archive, initialize_disposition_archive
 from report.history import get_report
-from review.service import review_case
+from review.service import (
+    get_disposition,
+    issue_disposition,
+    open_disposition,
+    revise_disposition,
+    review_case,
+)
+from sorting import SortingDesk
 
 
 def shift_draft(reference_name):
@@ -76,6 +84,83 @@ def _print_scenario(inputs, reports, reopened, old_packet):
     }, ensure_ascii=False, sort_keys=True))
 
 
+def _print_disposition(outcome):
+    opened, upgraded = outcome['opened'], outcome['upgraded']
+    execution = outcome['execution']
+    corrected = outcome['corrected']
+    print('DISPOSITION_SCENARIO ' + json.dumps({
+        'case_id': 'late-ticket-after-upgrade',
+        'opened_report': opened['report_id'],
+        'upgraded_report': upgraded['report_id'],
+        'executed_report': execution['ticket']['report_id'],
+        'executed_request': execution['request_id'],
+        'conflict_report': outcome['conflict']['report_id'],
+        'corrected_report': corrected['report_id'],
+        'oracle': '开 R6 后换 R8，迟到 R6 原单实记；改 I12 拒签并保留 R8，同类改 R4 可签。',
+    }, ensure_ascii=False, sort_keys=True))
+
+
+def disposition_demo(root):
+    """Shut down the source and show late-ticket/retrieval disposition results."""
+    catalog = sqlite3.connect(root / 'intake.db')
+    archive = sqlite3.connect(root / 'reports.db')
+    sorting_db = sqlite3.connect(root / 'sorting.db')
+    initialize_catalog(catalog)
+    initialize_archive(archive)
+    initialize_disposition_archive(archive)
+    desk = SortingDesk(sorting_db)
+    with closing(sqlite3.connect(root / 'source.db')) as source:
+        packets = prepare_examples(source, catalog)
+    try:
+        send = desk.exchange
+        opened = open_disposition(catalog, archive, send, 'demo-open', 'A',
+                                  packets['R6'].packet_id, DEVIATION)
+        upgraded = revise_disposition(catalog, archive, send, 'demo-r8', 'A',
+                                      opened['report_id'], packets['R8'].packet_id)
+        desk.after_commit = DropReply('apply', 'demo-exec')
+        try:
+            desk.apply('demo-exec', 'A', opened['ticket'])
+        except TimeoutError:
+            pass
+        desk.after_commit = None
+        if sorting_db is not None:
+            sorting_db.close()
+        sorting_db = sqlite3.connect(root / 'sorting.db')
+        desk = SortingDesk(sorting_db)
+        send = desk.exchange
+        execution = desk.get_execution('A')
+        conflict = revise_disposition(catalog, archive, send, 'demo-i12', 'A',
+                                      upgraded['report_id'], packets['I12'].packet_id)
+        corrected = revise_disposition(catalog, archive, send, 'demo-r4', 'A',
+                                       upgraded['report_id'], packets['R4'].packet_id)
+        corrected_ticket = issue_disposition(archive, send, 'A')
+        assert execution['ticket']['report_id'] == opened['report_id']
+        assert conflict == {'status': 'conflict', 'report_id': upgraded['report_id']}
+        assert corrected['status'] == 'signed'
+        history = []
+        for stage in ('opened', 'upgraded', 'corrected'):
+            report_id = {'opened': opened['report_id'], 'upgraded': upgraded['report_id'],
+                         'corrected': corrected['report_id']}[stage]
+            view = get_report(archive, report_id)
+            assert view is not None
+            history.append({'stage': stage, 'report_id': report_id,
+                            'category': 'release' if view.decision.status.value == 'pass' else 'isolate',
+                            'packet': view.first_receipt.packet_id,
+                            'receipt': view.first_receipt.receipt_id})
+        _print_disposition({
+            'opened': opened, 'upgraded': upgraded, 'execution': execution,
+            'conflict': conflict, 'corrected': corrected,
+        })
+        print('DISPOSITION_HISTORY ' + json.dumps(history, ensure_ascii=False, sort_keys=True))
+        print(f'实际执行单 {execution["ticket"]["report_id"]}（请求 {execution["request_id"]}）'
+              f'；现行报告 {get_disposition(archive, "A")["report_id"]}；'
+              f'新单 {corrected_ticket["report_id"]}')
+    finally:
+        catalog.close()
+        archive.close()
+        sorting_db.close()
+
+
 def main():
     sample = json.loads((Path(__file__).parent / 'samples' / 'shift.json').read_text(encoding='utf-8'))
     bench = sample['bench_reference']
@@ -117,6 +202,7 @@ def main():
             print(f'台架归一 {initial.normalized} μm → {corrected.normalized} μm')
             print(f'补测后使用实收件 {new_packet.packet_id}，偏差 5 的换算值为 {new_result.decision.value} μm')
             print(f'重开领取报告 {original.report_id}，实收件 {original.first_receipt.packet_id}，首执 {original.first_receipt.receipt_id}')
+        disposition_demo(root)
 
 
 if __name__ == '__main__':

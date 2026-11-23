@@ -45,6 +45,38 @@ def initialize_archive(archive: sqlite3.Connection) -> None:
         ''')
 
 
+def initialize_disposition_archive(archive: sqlite3.Connection) -> None:
+    """Enable disposition bookkeeping beside the signed report archive."""
+    if archive.in_transaction:
+        raise RuntimeError('disposition initialization requires an idle connection')
+    with archive:
+        archive.execute('BEGIN IMMEDIATE')
+        archive.execute('''
+            CREATE TABLE IF NOT EXISTS disposition_specimens (
+                specimen TEXT PRIMARY KEY,
+                report_id INTEGER NOT NULL REFERENCES reports (report_id),
+                category TEXT NOT NULL,
+                generation INTEGER NOT NULL,
+                deviation TEXT NOT NULL
+            )
+        ''')
+        archive.execute('''
+            CREATE TABLE IF NOT EXISTS disposition_requests (
+                request_id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                specimen TEXT NOT NULL,
+                packet_id INTEGER NOT NULL,
+                parent_report_id INTEGER,
+                deviation TEXT NOT NULL,
+                category TEXT,
+                generation INTEGER,
+                status TEXT NOT NULL,
+                report_id INTEGER,
+                ticket_json TEXT
+            )
+        ''')
+
+
 def insert_report(archive: sqlite3.Connection, decision: Decision) -> int:
     if not archive.in_transaction:
         raise RuntimeError('report insert requires a signing transaction')

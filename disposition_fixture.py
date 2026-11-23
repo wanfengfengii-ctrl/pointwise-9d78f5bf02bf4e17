@@ -10,9 +10,10 @@ from procedure.conversion import ConversionSpec
 from procedure.edit import DraftRule, ProcedureDraft
 from procedure.freeze import freeze_procedure, initialize_procedure_store
 from procedure.guards import RationalInterval
-from report.archive import initialize_archive
+from report.archive import initialize_archive, initialize_disposition_archive
 from report.history import get_report
 from review.service import review_case
+from sorting import SortingDesk
 
 DEVIATION = "2"
 EXAMPLES = {
@@ -40,9 +41,11 @@ def workbench(root):
     with (
         closing(sqlite3.connect(root / "intake.db")) as catalog,
         closing(sqlite3.connect(root / "reports.db")) as archive,
-        closing(sqlite3.connect(root / "sorting.db")) as sorting,
+        closing(sqlite3.connect(root / "sorting.db")) as sorting_db,
     ):
         initialize_archive(archive)
+        initialize_disposition_archive(archive)
+        sorting = SortingDesk(sorting_db)
         with closing(sqlite3.connect(root / "source.db")) as source:
             packets = prepare_examples(source, catalog)
         yield catalog, archive, sorting, packets
@@ -75,8 +78,8 @@ def main():
     with TemporaryDirectory(prefix="jin-heng-disposition-") as directory:
         root = Path(directory)
         with workbench(root) as (catalog, archive, sorting, packets):
-            assert archive.execute("PRAGMA database_list").fetchone()[2] != sorting.execute(
-                "PRAGMA database_list"
+            assert archive.execute("PRAGMA database_list").fetchone()[2] != (
+                sorting.db.execute("PRAGMA database_list")
             ).fetchone()[2]
             reports = verify_examples(catalog, archive, packets)
         with closing(sqlite3.connect(root / "reports.db")) as reopened:

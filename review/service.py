@@ -2,10 +2,24 @@ import sqlite3
 
 from exchange.catalog import get_accepted_packet
 from procedure.guards import RationalInput
+from report.disposition import (
+    get_disposition,
+    issue_disposition,
+    open_disposition,
+    revise_disposition,
+)
 from report.reconcile import ReconciliationView, reconcile_provenance
 from report.sign import sign_report
 from review.decision import decide
 from review.request import parse_review_request
+
+__all__ = [
+    'review_case',
+    'open_disposition',
+    'revise_disposition',
+    'issue_disposition',
+    'get_disposition',
+]
 
 
 def review_case(

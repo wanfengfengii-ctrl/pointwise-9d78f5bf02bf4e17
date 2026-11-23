@@ -45,3 +45,14 @@
 - 另一片在 R6 和 R8 分别发单。先让分拣提交 I12 改类并丢答，归档仍显示 R8 待核，但 R6、R8 的单均不能实记。若随后归档写首执失败，仍读 R8 和原待核，重开后同号可签回一份 I12 报告及首执。再换 R4，两张旧单仍不能执行，R4 单可实记。旧报告及首执可按各版正式号领取。
 
 保留原回归和原演示。扩展 `.pointwise-runtime.json`，沿用现有 `version`、`kind` 和 `setup`，将含原回归和新业务核验的命令登记为 `verify` 参数数组，将断源换版和领取的演示命令登记为 `demo` 参数数组。核验失败须以非零状态退出，演示打印实际报告、实际处置及其所据报告号。
+
+## 本工程落地
+
+- `report/disposition.py`：归档侧四个入口的实现；`review.service` 原样转出。
+- `sorting.py`：独立分拣库 `SortingDesk`，含投递、改类裁决与单次实记。
+- `disposition_fixture.py`：`workbench(root)` 与 `DropReply`；单独运行核验四个 V1 裁决和原报告重开领取。
+- `disposition_scenarios.py`：上文两条换版走查的可复用实现，供核验与测试共用。
+- `verify.py`：原回归（复用 `check_project.py`）+ 四份夹具 + 两条换版核验，任一失败非零退出。
+- `demo.py`：保留原交班演示，再追加断源后的迟到单换版与领取演示，打印实际报告号、实记请求号与实际执行单。
+- `tests/test_disposition.py`、`tests/test_sorting.py`、`tests/test_scenarios.py`：接口、账本与走查的回归。
+
