@@ -1,0 +1,17 @@
+{
+  "bench_reference": {
+    "name": "台架零点",
+    "initial_reading": "2000",
+    "corrected_reading": "3000",
+    "unit": "nm",
+    "initial_provenance": "白班台架记录 JH-11",
+    "corrected_provenance": "白班台架更正 JH-11-C"
+  },
+  "supplement": {
+    "name": "试片偏置",
+    "reading": "2000",
+    "unit": "nm",
+    "provenance": "白班补测记录 JH-12"
+  },
+  "deviations": ["5", "7", "8"]
+}
